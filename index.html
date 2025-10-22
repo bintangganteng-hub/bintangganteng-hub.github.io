@@ -1,43 +1,163 @@
 <!DOCTYPE html>
-<html lang="en">
-
+<html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-    <link rel="stylesheet" href="style.css">
-    <title>Website Us</title>
+    <title>Platformer Sederhana - Satu File</title>
+    
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #333;
+            overflow: hidden; /* Mencegah scroll saat game berjalan */
+        }
+
+        #gameCanvas {
+            border: 5px solid #000;
+            background-color: #70c5ce; /* Warna langit */
+        }
+    </style>
 </head>
 <body>
-    <header>
-        <a href="#" class="logo">About Us</a>
-
-        <nav>
-            <a href="#" class="active"> Home</a>
-            <a href="Home.html" >Photo</a>
-            <a href="#" >Kata Kata</a>
-            <a href="#" >Nomor</a>
-        </nav>
-    </header>
-    <section class="home">
-        <div class="home-img">
-            <img src="main.jpg" alt="">
-        </div>
-        <div class="home-content">
-            <h1>Hi, It's <span>Us</span></h1>
-            <h3 class="typing-text">W'e a <span></span></h3>
-            <p>Masa Yang Sudah Berlalu Tidak Bisa Diulang Walaupun Kita Mau.</p>
-            <div class="social-icons">
-            </div>
-            <a href="https://wa.me/628996455789" class="btn">Contact Us</a>
-        </div>
-        
-        
-        
-        
-        
-        
-    </section>
+    <canvas id="gameCanvas"></canvas>
     
+    <script>
+        // 1. Setup Canvas
+        const canvas = document.getElementById('gameCanvas');
+        const c = canvas.getContext('2d');
+
+        canvas.width = 1024; 
+        canvas.height = 576; 
+
+        // 2. Objek Game (Entitas dan Pemain)
+        class Entity {
+            constructor(x, y, width, height, color) {
+                this.position = { x, y };
+                this.width = width;
+                this.height = height;
+                this.color = color;
+            }
+            
+            draw() {
+                c.fillStyle = this.color;
+                c.fillRect(this.position.x, this.position.y, this.width, this.height);
+            }
+        }
+
+        class Player extends Entity {
+            constructor(x, y) {
+                super(x, y, 32, 32, 'red'); // Mario 32x32
+                this.velocity = { x: 0, y: 0 };
+                this.gravity = 0.5;
+            }
+            
+            update() {
+                this.draw();
+                
+                // Terapkan kecepatan horizontal
+                this.position.x += this.velocity.x; 
+
+                // Terapkan gravitasi
+                this.position.y += this.velocity.y;
+                
+                // Tambahkan gravitasi ke kecepatan Y
+                // Jika pemain tidak menyentuh dasar layar/platform (y+height < canvas.height)
+                if (this.position.y + this.height < canvas.height) {
+                    this.velocity.y += this.gravity;
+                } 
+                // Batas dasar layar (Fallback jika tabrakan platform tidak bekerja)
+                // else { 
+                //     this.velocity.y = 0;
+                //     this.position.y = canvas.height - this.height;
+                // }
+            }
+        }
+
+        // 3. Inisialisasi Objek
+        const player = new Player(100, 100);
+
+        const platforms = [
+            // Lantai dasar
+            new Entity(0, canvas.height - 50, canvas.width, 50, 'green'), 
+            // Platform di udara
+            new Entity(300, 400, 200, 20, 'brown'),
+            new Entity(650, 300, 150, 20, 'brown'),
+        ];
+
+        // 4. Logika Input (Gerakan)
+        const keys = {
+            right: { pressed: false },
+            left: { pressed: false }
+        };
+
+        window.addEventListener('keydown', ({ key }) => {
+            switch (key.toLowerCase()) {
+                case 'w': // Lompat
+                case ' ': // Lompat dengan spasi
+                    // Hanya bisa melompat jika kecepatan Y = 0 (dianggap di atas tanah/platform)
+                    if (player.velocity.y === 0) { 
+                        player.velocity.y = -12; // Kecepatan lompatan ke atas
+                    }
+                    break;
+                case 'a': // Kiri
+                    keys.left.pressed = true;
+                    break;
+                case 'd': // Kanan
+                    keys.right.pressed = true;
+                    break;
+            }
+        });
+
+        window.addEventListener('keyup', ({ key }) => {
+            switch (key.toLowerCase()) {
+                case 'a':
+                    keys.left.pressed = false;
+                    break;
+                case 'd':
+                    keys.right.pressed = false;
+                    break;
+            }
+        });
+
+        // 5. Loop Game (Fungsi Animate)
+        function animate() {
+            requestAnimationFrame(animate);
+            c.clearRect(0, 0, canvas.width, canvas.height); // Bersihkan canvas
+
+            // Kontrol Pemain (mengatur kecepatan X)
+            player.velocity.x = 0;
+            if (keys.right.pressed) {
+                player.velocity.x = 5;
+            } else if (keys.left.pressed) {
+                player.velocity.x = -5;
+            }
+
+            // Update dan gambar pemain
+            player.update();
+            
+            // Gambar dan Cek Tabrakan Platform
+            platforms.forEach(platform => {
+                platform.draw();
+                
+                // Logika Deteksi Tabrakan Sumbu Y (Pemain jatuh ke Platform)
+                if (
+                    player.position.y + player.height <= platform.position.y && // Kaki Pemain di atas Platform
+                    player.position.y + player.height + player.velocity.y >= platform.position.y && // Pemain bergerak menuju Platform
+                    player.position.x + player.width >= platform.position.x && // Sisi kiri Pemain melewati batas kiri Platform
+                    player.position.x <= platform.position.x + platform.width // Sisi kanan Pemain melewati batas kanan Platform
+                ) {
+                    player.velocity.y = 0; // Hentikan jatuh
+                    // Koreksi posisi agar pemain tepat di atas platform
+                    player.position.y = platform.position.y - player.height; 
+                }
+            });
+        }
+
+        animate();
+    </script>
 </body>
 </html>
