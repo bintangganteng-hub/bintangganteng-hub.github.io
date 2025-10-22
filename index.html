@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Platformer Scrolling Panjang</title>
+    <title>Platformer Scrolling Sederhana</title>
     
     <style>
         body {
@@ -20,33 +20,53 @@
 
         #gameCanvas {
             border: 5px solid #000;
-            background-color: #70c5ce;
+            background-color: #70c5ce; /* Warna langit */
         }
         
-        #winMessage {
+        /* Gaya untuk pesan Status Game */
+        .message-box {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            font-size: 48px;
-            background-color: rgba(0, 0, 0, 0.7);
-            padding: 20px;
+            font-size: 36px;
+            text-align: center;
+            background-color: rgba(0, 0, 0, 0.85);
+            padding: 30px 50px;
             border-radius: 10px;
-            display: none; /* Sembunyikan sampai pemain menang */
+            border: 3px solid white;
+            display: none; 
+            z-index: 10;
+        }
+        
+        .message-box button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 20px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            background-color: #f1f1f1;
+            color: #333;
         }
     </style>
 </head>
 <body>
     <canvas id="gameCanvas"></canvas>
-    <div id="winMessage">SELAMAT! ANDA BERHASIL!</div>
+    
+    <div id="statusMessage" class="message-box">
+        <h2 id="statusTitle"></h2>
+        <button id="restartButton">Mulai Lagi (Tekan R)</button>
+    </div>
     
     <script>
-        // 1. Setup Canvas
+        // 1. Setup Canvas dan Elemen
         const canvas = document.getElementById('gameCanvas');
         const c = canvas.getContext('2d');
-        const winMessage = document.getElementById('winMessage');
+        const statusMessageDiv = document.getElementById('statusMessage');
+        const statusTitle = document.getElementById('statusTitle');
+        const restartButton = document.getElementById('restartButton');
 
-        // Ukuran Canvas
         canvas.width = 1024; 
         canvas.height = 576; 
         
@@ -54,12 +74,21 @@
         const GRAVITY = 0.5;
         const PLAYER_SPEED = 5;
         const JUMP_POWER = -12;
+        const LEVEL_END_DISTANCE = 4000; 
         
-        // VARIABEL UTAMA UNTUK SCROLLING
-        let scrollOffset = 0; // Seberapa jauh dunia telah bergeser ke kiri (panjang game)
-        const LEVEL_END_DISTANCE = 4000; // Jarak total level (misalnya, 4000 pixel)
+        // VARIABEL GLOBAL UNTUK STATUS DAN OBJEK
+        let gameStatus; // 'playing', 'win', 'gameOver'
+        let requestAnimationFrameID;
+        let scrollOffset;
+        let player;
+        let platforms;
+        const keys = {
+            right: { pressed: false },
+            left: { pressed: false }
+        };
 
-        // 2. Objek Game (Entitas dan Pemain)
+        // 2. Class Objek Game
+        
         class Entity {
             constructor(x, y, width, height, color) {
                 this.position = { x, y };
@@ -76,68 +105,83 @@
 
         class Player extends Entity {
             constructor(x, y) {
-                super(x, y, 32, 32, 'red');
+                super(x, y, 32, 32, 'red'); // Kotak merah (Mario)
                 this.velocity = { x: 0, y: 0 };
             }
             
             update() {
                 this.draw();
-                
-                // Terapkan kecepatan horizontal (saat ini hanya untuk animasi)
                 this.position.x += this.velocity.x; 
-
-                // Terapkan gravitasi
                 this.position.y += this.velocity.y;
                 
+                // Terapkan Gravitasi
                 if (this.position.y + this.height + this.velocity.y < canvas.height) {
                     this.velocity.y += GRAVITY;
-                } else {
-                    // Jika jatuh di bawah layar (mati)
-                    // Nanti bisa tambahkan logika "game over" di sini
                 }
             }
         }
 
-        // 3. Inisialisasi Objek Level (Dunia Game)
-        const player = new Player(100, 100);
+        // 3. Fungsi Inisialisasi Level (Untuk Mulai Baru/Restart)
+        function init() {
+            gameStatus = 'playing';
+            scrollOffset = 0;
+            statusMessageDiv.style.display = 'none';
 
-        // Definisi Platform JAUH LEBIH PANJANG
-        const platforms = [
-            // Lantai Dasar Awal
-            new Entity(0, canvas.height - 50, 400, 50, 'green'), 
-            // Celah
-            new Entity(600, canvas.height - 50, 400, 50, 'green'),
-            
-            // Platform 1 (Lompatan kecil)
-            new Entity(900, 450, 150, 20, 'brown'),
-            
-            // Platform 2 (Lompatan tinggi)
-            new Entity(1200, 300, 100, 20, 'brown'),
-            
-            // Platform 3 (Lantai yang lebih panjang)
-            new Entity(1500, canvas.height - 50, 1000, 50, 'green'),
-            
-            // Platform 4 (Tangga)
-            new Entity(2600, 450, 100, 20, 'brown'),
-            new Entity(2750, 350, 100, 20, 'brown'),
-            new Entity(2900, 250, 100, 20, 'brown'),
-            
-            // Platform 5 (Platform akhir/Tujuan)
-            new Entity(3500, canvas.height - 50, 1000, 50, 'gold'), 
-        ];
+            player = new Player(100, 100);
 
-        // 4. Logika Input
-        const keys = {
-            right: { pressed: false },
-            left: { pressed: false }
-        };
+            // Definisi Platform (Level yang Panjang)
+            platforms = [
+                // Lantai Dasar Awal
+                new Entity(0, canvas.height - 50, 400, 50, 'green'), 
+                // Celah (Jarak Kosong)
+                new Entity(600, canvas.height - 50, 400, 50, 'green'),
+                
+                // Platform 1 (Lompatan kecil)
+                new Entity(900, 450, 150, 20, 'brown'),
+                
+                // Platform 2 (Lompatan tinggi)
+                new Entity(1200, 300, 100, 20, 'brown'),
+                
+                // Jeda dan Platform Tengah Panjang
+                new Entity(1500, canvas.height - 50, 1000, 50, 'green'),
+                
+                // Platform 4 (Tangga)
+                new Entity(2600, 450, 100, 20, 'brown'),
+                new Entity(2750, 350, 100, 20, 'brown'),
+                new Entity(2900, 250, 100, 20, 'brown'),
+                
+                // Platform Akhir/Tujuan
+                new Entity(3500, canvas.height - 50, 1000, 50, 'gold'), 
+            ];
+            
+            // Atur ulang status tombol
+            keys.right.pressed = false;
+            keys.left.pressed = false;
 
+            // Hentikan loop lama dan mulai yang baru
+            if (requestAnimationFrameID) {
+                cancelAnimationFrame(requestAnimationFrameID);
+            }
+            animate();
+        }
+
+        // 4. Input Listener (Deteksi Tombol)
+        
+        // Tombol Down
         window.addEventListener('keydown', ({ key }) => {
+            // Restart cepat jika game selesai/gagal
+            if (gameStatus !== 'playing' && key.toLowerCase() === 'r') {
+                init();
+                return;
+            }
+            // Abaikan input jika game tidak 'playing'
+            if (gameStatus !== 'playing') return;
+            
             switch (key.toLowerCase()) {
                 case 'w':
                 case ' ':
                     if (player.velocity.y === 0) { 
-                        player.velocity.y = JUMP_POWER;
+                        player.velocity.y = JUMP_POWER; // Lompat!
                     }
                     break;
                 case 'a':
@@ -149,6 +193,7 @@
             }
         });
 
+        // Tombol Up
         window.addEventListener('keyup', ({ key }) => {
             switch (key.toLowerCase()) {
                 case 'a':
@@ -160,46 +205,49 @@
             }
         });
         
-        // 5. Fungsi Game Utama
+        // Tombol Restart (di layar status)
+        restartButton.addEventListener('click', () => {
+             if (gameStatus !== 'playing') {
+                init();
+            }
+        });
+
+        // 5. Loop Game Utama
         function animate() {
-            requestAnimationFrame(animate);
+            requestAnimationFrameID = requestAnimationFrame(animate);
             c.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Jika game tidak bermain, hentikan loop
+            if (gameStatus !== 'playing') {
+                return;
+            }
 
             player.update();
             
-            // Logika Gerakan dan Scrolling
+            // Logika Pergerakan dan Scrolling
+            player.velocity.x = 0;
             
-            // 1. Gerak Kanan
+            // Aturan: Jika pemain di bagian tengah layar, dunia yang bergerak (scrolling)
             if (keys.right.pressed && player.position.x < 400) {
-                // Pemain bergerak jika masih di dekat batas kiri (0-400px)
                 player.velocity.x = PLAYER_SPEED;
             } else if (keys.left.pressed && player.position.x > 100) {
-                // Pemain bergerak jika masih di dekat batas kiri (di atas 100px)
                 player.velocity.x = -PLAYER_SPEED;
             } else {
-                // Jika pemain sudah cukup jauh (di atas 400px), dunia yang bergerak (Scrolling)
-                player.velocity.x = 0;
-                
+                // Lakukan Scrolling
                 if (keys.right.pressed && scrollOffset < LEVEL_END_DISTANCE) {
-                    // Geser dunia ke kiri (tambah offset)
                     scrollOffset += PLAYER_SPEED;
-                    platforms.forEach(platform => {
-                        platform.position.x -= PLAYER_SPEED;
-                    });
+                    platforms.forEach(platform => { platform.position.x -= PLAYER_SPEED; }); // Pindahkan platform ke kiri
                 } else if (keys.left.pressed && scrollOffset > 0) {
-                    // Geser dunia ke kanan (kurangi offset)
                     scrollOffset -= PLAYER_SPEED;
-                    platforms.forEach(platform => {
-                        platform.position.x += PLAYER_SPEED;
-                    });
+                    platforms.forEach(platform => { platform.position.x += PLAYER_SPEED; }); // Pindahkan platform ke kanan
                 }
             }
             
-            // 2. Tabrakan Platform
+            // Tabrakan Platform
             platforms.forEach(platform => {
                 platform.draw();
                 
-                // Cek Tabrakan Sumbu Y (Pemain jatuh ke Platform)
+                // Logika Tabrakan Sumbu Y (Pemain mendarat di Platform)
                 if (
                     player.position.y + player.height <= platform.position.y && 
                     player.position.y + player.height + player.velocity.y >= platform.position.y && 
@@ -207,22 +255,31 @@
                     player.position.x <= platform.position.x + platform.width 
                 ) {
                     player.velocity.y = 0; // Hentikan jatuh
-                    player.position.y = platform.position.y - player.height; // Koreksi posisi
+                    player.position.y = platform.position.y - player.height; // Koreksi posisi tepat di atas
                 }
             });
             
-            // 3. Kondisi Menang (Win Condition)
-            // Jika scrollOffset mencapai batas akhir level
+            // --- KONDISI GAME OVER (Mati) ---
+            // Jika pemain jatuh di bawah layar (ke celah/jurang)
+            if (player.position.y > canvas.height) {
+                gameStatus = 'gameOver';
+                statusTitle.textContent = 'GAME OVER! 💀 Anda Jatuh!';
+                statusMessageDiv.style.display = 'block';
+                cancelAnimationFrame(requestAnimationFrameID);
+            }
+            
+            // --- KONDISI MENANG ---
+            // Jika pemain telah mencapai akhir jarak scrolling
             if (scrollOffset >= LEVEL_END_DISTANCE) {
-                winMessage.style.display = 'block';
-                player.velocity.x = 0;
-                player.velocity.y = 0;
-                // Anda bisa menghentikan requestAnimationFrame di sini jika mau
-                // Misalnya: cancelAnimationFrame(requestAnimationFrameID);
+                gameStatus = 'win';
+                statusTitle.textContent = 'SELAMAT! 🏆 ANDA BERHASIL!';
+                statusMessageDiv.style.display = 'block';
+                cancelAnimationFrame(requestAnimationFrameID);
             }
         }
 
-        animate();
+        // Mulai Game saat halaman dimuat
+        init();
     </script>
 </body>
 </html>
