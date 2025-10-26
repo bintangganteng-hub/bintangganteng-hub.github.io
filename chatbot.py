@@ -1,41 +1,53 @@
-import transformers
-import torch
+import random
+import urllib.request
+import json
 
-class Chatbot:
-    def __init__(self, model_name="gpt2"):
-        self.tokenizer = transformers.AutoTokenizer.from_pretrained(model_name)
-        self.model = transformers.AutoModelForCausalLM.from_pretrained(model_name)
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model.to(self.device)
+def sapaan():
+    sapaan = ["Halo!", "Hai!", "Selamat datang!", "Apa kabar?"]
+    return random.choice(sapaan)
 
-    def generate_response(self, prompt, max_length=100):
-        input_ids = self.tokenizer.encode(prompt, return_tensors="pt").to(self.device)
-        attention_mask = torch.ones(input_ids.shape, dtype=torch.long).to(self.device)
+def get_weather(city):
+    try:
+        # Ganti dengan API key Anda jika diperlukan
+        api_url = f"https://api.openweathermap.org/data/2.5/weather?q={city}&appid=AIzaSyDIF622TSXxQWdfCmdHZEZI4M3mMffGf-c"
+        with urllib.request.urlopen(api_url) as url:
+            data = json.loads(url.read().decode())
+            if data["cod"] == 200:
+                description = data["weather"][0]["description"]
+                temperature = data["main"]["temp"] - 273.15  # Convert from Kelvin to Celsius
+                return f"Cuaca di {city}: {description}, suhu: {temperature:.2f} °C"
+            else:
+                return "Kota tidak ditemukan."
+    except Exception as e:
+        print(e)
+        return "Maaf, terjadi kesalahan saat mengambil data cuaca."
 
-        output = self.model.generate(
-            input_ids,
-            max_length=max_length,
-            num_return_sequences=1,
-            no_repeat_ngram_size=2,
-            attention_mask=attention_mask,
-            early_stopping=True
-        )
+def respon_pertanyaan(pertanyaan):
+    pertanyaan = pertanyaan.lower()
+    if "nama kamu siapa" in pertanyaan:
+        return "Saya adalah chatbot sederhana."
+    elif "apa kabar" in pertanyaan:
+        return "Saya baik-baik saja, terima kasih sudah bertanya!"
+    elif "terima kasih" in pertanyaan:
+        return "Sama-sama!"
+    elif "selamat tinggal" in pertanyaan:
+        return "Sampai jumpa lagi!"
+    elif "cuaca di" in pertanyaan:
+        city = pertanyaan.split("cuaca di ")[1]
+        return get_weather(city)
+    else:
+        return "Maaf, saya tidak mengerti pertanyaan Anda."
 
-        response = self.tokenizer.decode(output[0], skip_special_tokens=True)
-        return response
-
-    def chat(self):
-        print("Chatbot: Halo! Saya adalah chatbot yang mirip dengan ChatGPT. Bagaimana saya bisa membantu Anda?")
-        while True:
-            user_input = input("Anda: ")
-            if user_input.lower() == "berhenti":
-                print("Chatbot: Sampai jumpa!")
-                break
-
-            prompt = f"Anda: {user_input}\nChatbot:"
-            response = self.generate_response(prompt)
-            print("Chatbot:", response)
+def main():
+    print(sapaan())
+    while True:
+        pertanyaan = input("Anda: ")
+        if pertanyaan.lower() == "berhenti":
+            print("Chatbot: Sampai jumpa!")
+            break
+        else:
+            jawaban = respon_pertanyaan(pertanyaan)
+            print("Chatbot:", jawaban)
 
 if __name__ == "__main__":
-    chatbot = Chatbot()
-    chatbot.chat()
+    main()
