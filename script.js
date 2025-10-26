@@ -2,7 +2,7 @@ const chatLog = document.getElementById('chatLog');
 const userInput = document.getElementById('userInput');
 
 const apiKey = 'AIzaSyDIF622TSXxQWdfCmdHZEZI4M3mMffGf-c'; // Ganti dengan API key Anda
-const apiUrl = 'https://api.openai.com/v1/engines/davinci-codex/completions'; // Contoh API endpoint
+const apiUrl = 'hAIzaSyDIF622TSXxQWdfCmdHZEZI4M3mMffGf-c'; // Contoh API endpoint
 
 function addMessage(message, sender) {
     const messageElement = document.createElement('div');
